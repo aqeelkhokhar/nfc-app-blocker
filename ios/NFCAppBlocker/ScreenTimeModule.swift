@@ -107,40 +107,45 @@ class ScreenTimeModule: NSObject {
       return
     }
 
-    guard let rootVC = ScreenTimeModule.findRootViewController() else {
-      reject("E_NO_ROOT", "Unable to find root view controller to present picker", nil)
-      return
-    }
-
-    pickerResolve = resolve
-    pickerReject = reject
-
-    let hosting = UIHostingController(rootView: ActivityPickerView { [weak self] selection in
+    // All UIKit/SwiftUI presentation must happen on the main thread
+    DispatchQueue.main.async { [weak self] in
       guard let self else { return }
 
-      let resolveBlock = self.pickerResolve
-      let rejectBlock = self.pickerReject
-      self.pickerResolve = nil
-      self.pickerReject = nil
-
-      guard let selection else {
-        // User cancelled
-        resolveBlock?(NSNull())
+      guard let rootVC = ScreenTimeModule.findRootViewController() else {
+        reject("E_NO_ROOT", "Unable to find root view controller to present picker", nil)
         return
       }
 
-      do {
-        let data = try JSONEncoder().encode(selection)
-        let encoded = data.base64EncodedString()
-        self.cachedSelection = selection
-        resolveBlock?(encoded)
-      } catch {
-        rejectBlock?("E_ENCODE", "Failed to encode FamilyActivitySelection", error)
-      }
-    })
+      self.pickerResolve = resolve
+      self.pickerReject = reject
 
-    hosting.modalPresentationStyle = .formSheet
-    rootVC.present(hosting, animated: true)
+      let hosting = UIHostingController(rootView: ActivityPickerView { [weak self] selection in
+        guard let self else { return }
+
+        let resolveBlock = self.pickerResolve
+        let rejectBlock = self.pickerReject
+        self.pickerResolve = nil
+        self.pickerReject = nil
+
+        guard let selection else {
+          // User cancelled
+          resolveBlock?(NSNull())
+          return
+        }
+
+        do {
+          let data = try JSONEncoder().encode(selection)
+          let encoded = data.base64EncodedString()
+          self.cachedSelection = selection
+          resolveBlock?(encoded)
+        } catch {
+          rejectBlock?("E_ENCODE", "Failed to encode FamilyActivitySelection", error)
+        }
+      })
+
+      hosting.modalPresentationStyle = .formSheet
+      rootVC.present(hosting, animated: true)
+    }
   }
 
   // MARK: - Shield configuration
