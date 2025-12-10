@@ -1,10 +1,17 @@
 import { MMKV } from 'react-native-mmkv';
 
-export const storage = new MMKV({ id: 'nfc-app-blocker' });
+let storage: MMKV | null = null;
+
+function getStorage(): MMKV {
+  if (!storage) {
+    storage = new MMKV({ id: 'nfc-app-blocker' });
+  }
+  return storage;
+}
 
 export function getString(key: string): string | null {
   try {
-    return storage.getString(key) ?? null;
+    return getStorage().getString(key) ?? null;
   } catch {
     return null;
   }
@@ -13,13 +20,11 @@ export function getString(key: string): string | null {
 export function setString(key: string, value: string | null) {
   try {
     if (value == null) {
-      storage.delete(key);
+      getStorage().delete(key);
     } else {
-      storage.set(key, value);
+      getStorage().set(key, value);
     }
-  } catch {
-    // ignore for now; could add logging
-  }
+  } catch {}
 }
 
 export function getJson<T>(key: string): T | null {

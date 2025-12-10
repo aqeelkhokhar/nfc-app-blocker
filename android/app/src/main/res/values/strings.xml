@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">NFCAppBlocker</string>
+    <string name="accessibility_service_description">Blocks selected apps when Brick mode is enabled</string>
 </resources>

@@ -1,13 +1,17 @@
-import React from 'react';
-import { View, Text, StyleSheet, Button } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Button, Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { useBrick } from '../state/BrickContext';
+import { useNFC } from '../nfc/useNFC';
+import { readNFCTag, cancelNFC } from '../nfc/NFCService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 const HomeScreen: React.FC<Props> = ({ navigation }) => {
-  const { status, toggleBrick, blockedApps, pairedNfcTagId } = useBrick();
+  const { status, toggleBrick, blockedApps, pairedNfcTagId, setPairedNfcTagId } = useBrick();
+  const { isSupported, startScanning } = useNFC();
+  const [scanning, setScanning] = useState(false);
 
   return (
     <View style={styles.container}>
@@ -44,10 +48,28 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
       <View style={styles.buttonRow}>
         <Button
-          title="Pair NFC Tag (placeholder)"
-          onPress={() => {
-            // TODO: integrate real NFC pairing via react-native-nfc-manager
+          title={scanning ? 'Scanning...' : 'Pair NFC Tag'}
+          disabled={!isSupported || scanning}
+          onPress={async () => {
+            setScanning(true);
+            Alert.alert('Scan NFC Tag', 'Hold your phone near the NFC tag');
+            const tagId = await readNFCTag();
+            setScanning(false);
+            if (tagId) {
+              setPairedNfcTagId(tagId);
+              Alert.alert('Success', `Tag paired: ${tagId}`);
+            } else {
+              Alert.alert('Failed', 'Could not read NFC tag');
+            }
           }}
+        />
+      </View>
+
+      <View style={styles.buttonRow}>
+        <Button
+          title="Enable Auto-Toggle on Tag Scan"
+          disabled={!isSupported || !pairedNfcTagId}
+          onPress={startScanning}
         />
       </View>
     </View>

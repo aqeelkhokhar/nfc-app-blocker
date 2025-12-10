@@ -1,29 +1,66 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Button, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, Button, Platform, Alert, TextInput } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/RootNavigator';
-import { useBrick } from '../state/BrickContext';
+import { useBrick, AppInfo } from '../state/BrickContext';
 import {
   openScreenTimePicker,
   requestScreenTimeAuthorization,
   ScreenTimeAuthorizationStatus,
 } from '../platform/ios/ScreenTimeService';
+import { openAccessibilitySettings } from '../platform/android/AppBlockerService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AppSelection'>;
 
 const AppSelectionScreen: React.FC<Props> = () => {
-  const { iosSelectionData, setIosSelectionData, status } = useBrick();
+  const { iosSelectionData, setIosSelectionData, status, blockedApps, setBlockedApps } = useBrick();
   const [authStatus, setAuthStatus] = useState<ScreenTimeAuthorizationStatus>('unknown');
   const [loading, setLoading] = useState(false);
+  const [packageInput, setPackageInput] = useState('');
 
-  if (Platform.OS !== 'ios') {
+  if (Platform.OS === 'android') {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>App Selection (Android)</Text>
-        <Text>
-          Android app selection and blocking will be implemented using Accessibility Service in a
-          later step.
+        <Text style={styles.title}>Android App Blocker</Text>
+        <Text style={styles.paragraph}>
+          1. Enable Accessibility Service in Settings
         </Text>
+        <Text style={styles.paragraph}>
+          2. Add package names to block (e.g., com.instagram.android)
+        </Text>
+
+        <View style={styles.buttonRow}>
+          <Button title="Open Accessibility Settings" onPress={() => openAccessibilitySettings()} />
+        </View>
+
+        <TextInput
+          style={styles.input}
+          placeholder="com.example.app"
+          value={packageInput}
+          onChangeText={setPackageInput}
+        />
+
+        <View style={styles.buttonRow}>
+          <Button
+            title="Add Package"
+            onPress={() => {
+              if (packageInput.trim()) {
+                const newApp: AppInfo = {
+                  id: packageInput.trim(),
+                  name: packageInput.trim(),
+                  platform: 'android',
+                };
+                setBlockedApps([...blockedApps, newApp]);
+                setPackageInput('');
+              }
+            }}
+          />
+        </View>
+
+        <Text style={styles.label}>Blocked packages:</Text>
+        {blockedApps.filter(a => a.platform === 'android').map(app => (
+          <Text key={app.id} style={styles.value}>{app.id}</Text>
+        ))}
       </View>
     );
   }
@@ -121,6 +158,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 16,
     color: '#555',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 4,
+    padding: 8,
+    marginTop: 12,
   },
   label: {
     fontSize: 14,

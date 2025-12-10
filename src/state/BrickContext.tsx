@@ -1,6 +1,9 @@
-import React, { createContext, useContext, useMemo, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useMemo, useState, ReactNode, useEffect } from 'react';
 import { Platform } from 'react-native';
 import { setScreenTimeBlockingEnabled } from '../platform/ios/ScreenTimeService';
+import { setAndroidBlockingEnabled, setAndroidBlockedPackages } from '../platform/android/AppBlockerService';
+import { getJson, setJson, getString, setString } from '../storage/mmkv';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 export type BrickStatus = 'BRICKED' | 'UNBRICKED';
 
@@ -28,34 +31,46 @@ interface BrickContextValue extends BrickState {
 
 const BrickContext = createContext<BrickContextValue | undefined>(undefined);
 
-const initialState: BrickState = {
-  status: 'UNBRICKED',
-  blockedApps: [],
-  pairedNfcTagId: null,
-  iosSelectionData: null,
-};
+function loadInitialState(): BrickState {
+  try {
+    return {
+      status: (getString(STORAGE_KEYS.BRICK_STATUS) as BrickStatus) ?? 'UNBRICKED',
+      blockedApps: getJson<AppInfo[]>(STORAGE_KEYS.BLOCKED_APPS) ?? [],
+      pairedNfcTagId: getString(STORAGE_KEYS.NFC_TAG_ID),
+      iosSelectionData: getString(STORAGE_KEYS.IOS_SELECTION),
+    };
+  } catch {
+    return {
+      status: 'UNBRICKED',
+      blockedApps: [],
+      pairedNfcTagId: null,
+      iosSelectionData: null,
+    };
+  }
+}
 
 export function BrickProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<BrickState>(initialState);
+  const [state, setState] = useState<BrickState>(loadInitialState);
 
   const value = useMemo<BrickContextValue>(() => {
     const syncPlatforms = (next: BrickState) => {
-      // iOS Screen Time shields
       if (Platform.OS === 'ios' && next.iosSelectionData) {
-        setScreenTimeBlockingEnabled(next.status === 'BRICKED', next.iosSelectionData).catch(() => {
-          // swallow errors for now; could hook up logging
-        });
+        setScreenTimeBlockingEnabled(next.status === 'BRICKED', next.iosSelectionData).catch(() => {});
       }
-      // TODO: Android accessibility service sync will go here
+      if (Platform.OS === 'android') {
+        setAndroidBlockingEnabled(next.status === 'BRICKED').catch(() => {});
+        const packages = next.blockedApps.filter(a => a.platform === 'android').map(a => a.id);
+        setAndroidBlockedPackages(packages).catch(() => {});
+      }
     };
 
     const setBrickStatus = (status: BrickStatus) => {
       setState(prev => {
         const next: BrickState = { ...prev, status };
         syncPlatforms(next);
+        setString(STORAGE_KEYS.BRICK_STATUS, status);
         return next;
       });
-      // TODO: sync to MMKV
     };
 
     const toggleBrick = () => {
@@ -66,27 +81,26 @@ export function BrickProvider({ children }: { children: ReactNode }) {
       setState(prev => {
         const next: BrickState = { ...prev, blockedApps: apps };
         syncPlatforms(next);
+        setJson(STORAGE_KEYS.BLOCKED_APPS, apps);
         return next;
       });
-      // TODO: sync to MMKV
     };
 
     const setPairedNfcTagId = (id: string | null) => {
       setState(prev => {
         const next: BrickState = { ...prev, pairedNfcTagId: id };
-        // no platform sync needed yet
+        setString(STORAGE_KEYS.NFC_TAG_ID, id);
         return next;
       });
-      // TODO: sync to MMKV
     };
 
     const setIosSelectionData = (data: string | null) => {
       setState(prev => {
         const next: BrickState = { ...prev, iosSelectionData: data };
         syncPlatforms(next);
+        setString(STORAGE_KEYS.IOS_SELECTION, data);
         return next;
       });
-      // TODO: sync to MMKV
     };
 
     return {
