@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import android.util.Log
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -21,6 +22,8 @@ class AppBlockerModule(reactContext: ReactApplicationContext) : ReactContextBase
     @ReactMethod
     fun setBlockingEnabled(enabled: Boolean, promise: Promise) {
         try {
+            // Persist enabled state natively so blocking can continue without JS
+            BlockedAppsStore.setEnabled(reactApplicationContext, enabled)
             AppBlockerService.isEnabled = enabled
             Log.d(TAG, "App blocking ${if (enabled) "enabled" else "disabled"}")
             promise.resolve(null)
@@ -36,7 +39,8 @@ class AppBlockerModule(reactContext: ReactApplicationContext) : ReactContextBase
             val blockedPackages = (0 until packages.size())
                 .mapNotNull { packages.getString(it) }
                 .toSet()
-            
+            // Store list in native SharedPreferences so it survives app kills
+            BlockedAppsStore.setAll(reactApplicationContext, blockedPackages)
             AppBlockerService.blockedPackages = blockedPackages
             Log.d(TAG, "Blocked packages updated: ${blockedPackages.joinToString()}")
             AppBlockerService.logBlockedPackages()
@@ -44,6 +48,32 @@ class AppBlockerModule(reactContext: ReactApplicationContext) : ReactContextBase
             promise.resolve(null)
         } catch (e: Exception) {
             Log.e(TAG, "Error setting blocked packages", e)
+            promise.reject("ERROR", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun getBlockedPackages(promise: Promise) {
+        try {
+            val pkgs = BlockedAppsStore.getAll(reactApplicationContext)
+            val array = Arguments.createArray()
+            for (pkg in pkgs) {
+                array.pushString(pkg)
+            }
+            promise.resolve(array)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting blocked packages", e)
+            promise.reject("ERROR", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun isBlockingEnabled(promise: Promise) {
+        try {
+            val enabled = BlockedAppsStore.isEnabled(reactApplicationContext)
+            promise.resolve(enabled)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting blocking enabled state", e)
             promise.reject("ERROR", e.message)
         }
     }

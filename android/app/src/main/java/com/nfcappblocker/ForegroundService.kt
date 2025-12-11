@@ -120,14 +120,16 @@ class ForegroundService : Service() {
     }
     
     private fun checkCurrentApp() {
-        if (!AppBlockerService.isEnabled) {
-            // App blocking not enabled, nothing to do
+        // Use native store so behavior survives JS/app process death
+        if (!BlockedAppsStore.isEnabled(this)) {
             return
         }
         
         try {
             val currentApp = getForegroundApp()
-            if (currentApp != null && AppBlockerService.blockedPackages.contains(currentApp)) {
+            if (currentApp != null) {
+                val blocked = BlockedAppsStore.getAll(this)
+                if (blocked.contains(currentApp)) {
                 if (AppBlockerService.isServiceEnabled()) {
                     // Let the accessibility service handle the blocking
                     Log.d(TAG, "Detected blocked app in foreground: $currentApp, letting accessibility service handle it")
@@ -135,6 +137,7 @@ class ForegroundService : Service() {
                     // Accessibility service not enabled, try to launch our app
                     Log.d(TAG, "Detected blocked app but accessibility service not enabled, launching our app instead")
                     launchOurApp()
+                }
                 }
             }
         } catch (e: Exception) {

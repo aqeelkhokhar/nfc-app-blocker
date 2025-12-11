@@ -44,8 +44,8 @@ class AppBlockerService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         
-        if (!isEnabled) {
-            // Service is not enabled, do nothing
+        // Check native-enabled flag so blocking survives JS/app process death
+        if (!BlockedAppsStore.isEnabled(this)) {
             return
         }
 
@@ -53,8 +53,9 @@ class AppBlockerService : AccessibilityService() {
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             // Get the package name of the current app
             val packageName = event.packageName?.toString() ?: return
-            
-            if (blockedPackages.contains(packageName)) {
+
+            val blocked = BlockedAppsStore.getAll(this)
+            if (blocked.contains(packageName)) {
                 blockApp(packageName)
             }
         }

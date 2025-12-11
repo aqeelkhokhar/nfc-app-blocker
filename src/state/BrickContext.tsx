@@ -11,6 +11,8 @@ import { setScreenTimeBlockingEnabled } from '../platform/ios/ScreenTimeService'
 import {
   setAndroidBlockingEnabled,
   setAndroidBlockedPackages,
+  getAndroidBlockedPackages,
+  isAndroidBlockingEnabled,
 } from '../platform/android/AppBlockerService';
 import { checkAllPermissions } from '../platform/android/PermissionsService';
 import { getJson, setJson, getString, setString } from '../storage/mmkv';
@@ -63,6 +65,72 @@ function loadInitialState(): BrickState {
 
 export function BrickProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<BrickState>(loadInitialState);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    let cancelled = false;
+
+    const hydrateFromNative = async () => {
+      try {
+        const [enabled, nativePackages] = await Promise.all([
+          isAndroidBlockingEnabled(),
+          getAndroidBlockedPackages(),
+        ]);
+
+        if (cancelled) return;
+
+        if (!enabled && nativePackages.length === 0) {
+          return;
+        }
+
+        let androidBlockedApps: AppInfo[] = nativePackages.map(id => ({
+          id,
+          name: id,
+          platform: 'android',
+        }));
+
+        try {
+          const {
+            getInstalledApps,
+          } = require('../platform/android/InstalledAppsService');
+          const installedApps = await getInstalledApps();
+          if (cancelled) return;
+          androidBlockedApps = nativePackages.map(id => {
+            const match = installedApps.find((a: any) => a.id === id);
+            return {
+              id,
+              name: match?.name ?? id,
+              platform: 'android',
+            };
+          });
+        } catch {
+          // If we can't resolve app names, fall back to package IDs as names
+        }
+
+        setState(prev => {
+          const nonAndroid = prev.blockedApps.filter(
+            a => a.platform !== 'android',
+          );
+          const next: BrickState = {
+            ...prev,
+            status: enabled ? 'BRICKED' : prev.status,
+            blockedApps: [...nonAndroid, ...androidBlockedApps],
+          };
+          setJson(STORAGE_KEYS.BLOCKED_APPS, next.blockedApps);
+          return next;
+        });
+      } catch {
+        // Ignore native hydration errors to avoid breaking UI
+      }
+    };
+
+    hydrateFromNative();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const value = useMemo<BrickContextValue>(() => {
     const syncPlatforms = (next: BrickState) => {
