@@ -15,11 +15,15 @@ function RootNavigator() {
   return (
     <NavigationContainer>
       <Stack.Navigator>
-        <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'NFC App Blocker' }} />
+        <Stack.Screen
+          name="Home"
+          component={HomeScreen}
+          options={{ title: 'App Blocker' }}
+        />
         <Stack.Screen
           name="AppSelection"
           component={AppSelectionScreen}
-          options={{ title: 'Select Apps to Block' }}
+          options={{ title: 'Select Apps' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

@@ -1,7 +1,18 @@
-import React, { createContext, useContext, useMemo, useState, ReactNode, useEffect } from 'react';
-import { Platform } from 'react-native';
+import React, {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  ReactNode,
+  useEffect,
+} from 'react';
+import { Platform, Alert } from 'react-native';
 import { setScreenTimeBlockingEnabled } from '../platform/ios/ScreenTimeService';
-import { setAndroidBlockingEnabled, setAndroidBlockedPackages } from '../platform/android/AppBlockerService';
+import {
+  setAndroidBlockingEnabled,
+  setAndroidBlockedPackages,
+} from '../platform/android/AppBlockerService';
+import { checkAllPermissions } from '../platform/android/PermissionsService';
 import { getJson, setJson, getString, setString } from '../storage/mmkv';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 
@@ -34,7 +45,8 @@ const BrickContext = createContext<BrickContextValue | undefined>(undefined);
 function loadInitialState(): BrickState {
   try {
     return {
-      status: (getString(STORAGE_KEYS.BRICK_STATUS) as BrickStatus) ?? 'UNBRICKED',
+      status:
+        (getString(STORAGE_KEYS.BRICK_STATUS) as BrickStatus) ?? 'UNBRICKED',
       blockedApps: getJson<AppInfo[]>(STORAGE_KEYS.BLOCKED_APPS) ?? [],
       pairedNfcTagId: getString(STORAGE_KEYS.NFC_TAG_ID),
       iosSelectionData: getString(STORAGE_KEYS.IOS_SELECTION),
@@ -55,11 +67,16 @@ export function BrickProvider({ children }: { children: ReactNode }) {
   const value = useMemo<BrickContextValue>(() => {
     const syncPlatforms = (next: BrickState) => {
       if (Platform.OS === 'ios' && next.iosSelectionData) {
-        setScreenTimeBlockingEnabled(next.status === 'BRICKED', next.iosSelectionData).catch(() => {});
+        setScreenTimeBlockingEnabled(
+          next.status === 'BRICKED',
+          next.iosSelectionData,
+        ).catch(() => {});
       }
       if (Platform.OS === 'android') {
         setAndroidBlockingEnabled(next.status === 'BRICKED').catch(() => {});
-        const packages = next.blockedApps.filter(a => a.platform === 'android').map(a => a.id);
+        const packages = next.blockedApps
+          .filter(a => a.platform === 'android')
+          .map(a => a.id);
         setAndroidBlockedPackages(packages).catch(() => {});
       }
     };
@@ -73,7 +90,27 @@ export function BrickProvider({ children }: { children: ReactNode }) {
       });
     };
 
-    const toggleBrick = () => {
+    const toggleBrick = async () => {
+      // For Android, check permissions before enabling blocking
+      if (Platform.OS === 'android' && state.status !== 'BRICKED') {
+        // Only check permissions when trying to enable blocking
+        const permissions = await checkAllPermissions();
+
+        if (
+          !permissions.overlay ||
+          !permissions.usage ||
+          !permissions.accessibility
+        ) {
+          Alert.alert(
+            'Permissions Required',
+            'Please grant all required permissions before enabling blocking',
+            [{ text: 'OK', onPress: () => {} }],
+          );
+          return;
+        }
+      }
+
+      // If permissions are OK, or we're disabling blocking, or we're on iOS, proceed
       setBrickStatus(state.status === 'BRICKED' ? 'UNBRICKED' : 'BRICKED');
     };
 
@@ -113,7 +150,9 @@ export function BrickProvider({ children }: { children: ReactNode }) {
     };
   }, [state]);
 
-  return <BrickContext.Provider value={value}>{children}</BrickContext.Provider>;
+  return (
+    <BrickContext.Provider value={value}>{children}</BrickContext.Provider>
+  );
 }
 
 export function useBrick() {

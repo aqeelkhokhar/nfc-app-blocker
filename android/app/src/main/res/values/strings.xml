@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">NFCAppBlocker</string>
-    <string name="accessibility_service_description">Blocks selected apps when Brick mode is enabled</string>
+    <string name="app_name">App Blocker</string>
+    <string name="accessibility_service_description">App Blocker uses this service to detect when blocked apps are opened and prevent access to them. This service is required for the app blocking feature to work properly.</string>
 </resources>

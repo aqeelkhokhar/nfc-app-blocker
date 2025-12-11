@@ -15,6 +15,10 @@ class MainApplication : Application(), ReactApplication {
       packageList =
         PackageList(this).packages.apply {
           add(AppBlockerPackage())
+          add(InstalledAppsPackage())
+          add(UsageStatsPackage())
+          add(ForegroundServicePackage())
+          add(PermissionsPackage())
         },
     )
   }
