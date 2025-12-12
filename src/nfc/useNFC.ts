@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import NfcManager, { NfcEvents } from 'react-native-nfc-manager';
+import NfcManager, { NfcEvents, TagEvent } from 'react-native-nfc-manager';
 import { useBrick } from '../state/BrickContext';
 import { initNFC } from './NFCService';
 
@@ -10,7 +10,7 @@ export function useNFC() {
   useEffect(() => {
     initNFC().then(setIsSupported);
 
-    const listener = NfcManager.setEventListener(NfcEvents.DiscoverTag, tag => {
+    NfcManager.setEventListener(NfcEvents.DiscoverTag, (tag: TagEvent) => {
       if (pairedNfcTagId && tag.id === pairedNfcTagId) {
         toggleBrick();
       }
@@ -19,7 +19,7 @@ export function useNFC() {
     });
 
     return () => {
-      listener?.remove?.();
+      NfcManager.setEventListener(NfcEvents.DiscoverTag, null);
       NfcManager.unregisterTagEvent().catch(() => {});
     };
   }, [pairedNfcTagId, toggleBrick]);

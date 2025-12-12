@@ -1,316 +1,226 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Button,
-  Platform,
-  Alert,
   TextInput,
   ScrollView,
   Image,
   TouchableOpacity,
-  AppState,
+  Platform,
+  Alert,
+  StatusBar,
 } from 'react-native';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import LinearGradient from 'react-native-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
+
+// Navigation
 import { RootStackParamList } from '../navigation/RootNavigator';
+
+// State
 import { useBrick, AppInfo } from '../state/BrickContext';
+
+// Styles
+import { colors, spacing, borderRadius, typography } from '../styles';
+
+// Components
+import { Button, Card } from '../components/ui';
+
+// Hooks
+// Force update
+import { usePermissions } from '../hooks';
+
+// iOS Services
 import {
   openScreenTimePicker,
   requestScreenTimeAuthorization,
   ScreenTimeAuthorizationStatus,
 } from '../platform/ios/ScreenTimeService';
-import { hasUsageStatsPermission } from '../platform/android/UsageStatsService';
-import {
-  hasOverlayPermission,
-  requestOverlayPermission,
-  hasUsageStatsPermission as checkUsageStats,
-  requestUsageStatsPermission,
-  hasAccessibilityPermission,
-  requestAccessibilityPermission,
-  checkAllPermissions,
-} from '../platform/android/PermissionsService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AppSelection'>;
 
-const AppSelectionScreen: React.FC<Props> = () => {
-  const {
-    iosSelectionData,
-    setIosSelectionData,
-    status,
-    blockedApps,
-    setBlockedApps,
-  } = useBrick();
-  const [authStatus, setAuthStatus] =
-    useState<ScreenTimeAuthorizationStatus>('unknown');
-  const [loading, setLoading] = useState(false);
-  const [packageInput, setPackageInput] = useState('');
+// ============================================
+// Android App Selection Component
+// ============================================
+const AndroidAppSelection: React.FC<{
+  blockedApps: AppInfo[];
+  setBlockedApps: (apps: AppInfo[]) => void;
+  navigation: NativeStackNavigationProp<RootStackParamList, 'AppSelection'>;
+}> = ({ blockedApps, setBlockedApps, navigation }) => {
+  const [installedApps, setInstalledApps] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  if (Platform.OS === 'android') {
-    const [installedApps, setInstalledApps] = useState<any[]>([]);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [permissions, setPermissions] = useState({
-      overlay: false,
-      usage: false,
-      accessibility: false,
-    });
-    const [showPermissionPrompt, setShowPermissionPrompt] = useState(false);
+  const { getInstalledApps } = require('../platform/android/InstalledAppsService');
 
-    const {
-      getInstalledApps,
-    } = require('../platform/android/InstalledAppsService');
-
-    useEffect(() => {
-      const loadApps = async () => {
-        setLoading(true);
-        try {
-          const apps = await getInstalledApps();
-          setInstalledApps(apps);
-        } catch (error) {
-          Alert.alert('Error', 'Failed to load installed apps');
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      const subscription = AppState.addEventListener('change', nextAppState => {
-        if (nextAppState === 'active') {
-          checkPermissionsStatus();
-        }
-      });
-
-      loadApps();
-      checkPermissionsStatus();
-
-      return () => {
-        subscription.remove();
-      };
-    }, [checkPermissionsStatus]);
-
-    const checkPermissionsStatus = useCallback(async () => {
-      const permissionStatus = await checkAllPermissions();
-      setPermissions(permissionStatus);
-
-      if (
-        permissionStatus.overlay &&
-        permissionStatus.usage &&
-        permissionStatus.accessibility
-      ) {
-        setShowPermissionPrompt(false);
-      }
-    }, []);
-
-    const requestPermission = async (
-      type: 'overlay' | 'usage' | 'accessibility',
-    ) => {
+  useEffect(() => {
+    const loadApps = async () => {
+      setLoading(true);
       try {
-        let granted = false;
-
-        switch (type) {
-          case 'overlay':
-            granted = await requestOverlayPermission();
-            break;
-          case 'usage':
-            granted = await requestUsageStatsPermission();
-            break;
-          case 'accessibility':
-            granted = await requestAccessibilityPermission();
-            break;
-        }
-
-        await checkPermissionsStatus();
-        return granted;
+        const apps = await getInstalledApps();
+        setInstalledApps(apps);
       } catch (error) {
-        console.error(`Error requesting ${type} permission:`, error);
-        return false;
+        Alert.alert('Error', 'Failed to load installed apps');
+      } finally {
+        setLoading(false);
       }
     };
+    loadApps();
+  }, []);
 
-    const filteredApps = React.useMemo(() => {
-      if (!searchQuery.trim()) return installedApps;
+  const filteredApps = useMemo(() => {
+    if (!searchQuery.trim()) return installedApps;
+    const lowerQuery = searchQuery.toLowerCase();
+    return installedApps.filter(
+      (app: any) =>
+        app.name.toLowerCase().includes(lowerQuery) ||
+        app.id.toLowerCase().includes(lowerQuery)
+    );
+  }, [installedApps, searchQuery]);
 
-      const lowerQuery = searchQuery.toLowerCase();
-      return installedApps.filter(
-        app =>
-          app.name.toLowerCase().includes(lowerQuery) ||
-          app.id.toLowerCase().includes(lowerQuery),
-      );
-    }, [installedApps, searchQuery]);
+  const isAppBlocked = (appId: string) => {
+    return blockedApps.some(app => app.id === appId);
+  };
 
-    const isAppBlocked = (appId: string) => {
-      return blockedApps.some(app => app.id === appId);
-    };
+  const toggleAppBlock = (app: any) => {
+    if (isAppBlocked(app.id)) {
+      setBlockedApps(blockedApps.filter(blockedApp => blockedApp.id !== app.id));
+    } else {
+      setBlockedApps([
+        ...blockedApps,
+        { id: app.id, name: app.name, platform: 'android' },
+      ]);
+    }
+  };
 
-    const toggleAppBlock = (app: any) => {
-      if (isAppBlocked(app.id)) {
-        // Remove from blocked apps
-        setBlockedApps(
-          blockedApps.filter(blockedApp => blockedApp.id !== app.id),
-        );
-      } else {
-        // Add to blocked apps
-        setBlockedApps([
-          ...blockedApps,
-          {
-            id: app.id,
-            name: app.name,
-            platform: 'android',
-          },
-        ]);
-      }
-    };
+  const selectedCount = blockedApps.filter(a => a.platform === 'android').length;
 
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Select Apps to Block</Text>
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+      
+      <LinearGradient
+        colors={[colors.background, colors.backgroundSecondary]}
+        style={StyleSheet.absoluteFill}
+      />
 
-        <Text style={styles.paragraph}>
-          Select apps below that should be blocked when brick is activated.
-        </Text>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Select Apps</Text>
+          <Text style={styles.subtitle}>
+            Choose apps to block when blocking is enabled
+          </Text>
+        </View>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Search apps..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search apps..."
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
 
-        <Text style={styles.label}>
-          {loading
-            ? 'Loading apps...'
-            : `Select apps to block (${
-                blockedApps.filter(a => a.platform === 'android').length
-              } selected)`}
-        </Text>
+        {/* Selected Count */}
+        <View style={styles.countContainer}>
+          <Text style={styles.countText}>
+            {loading ? 'Loading apps...' : `${selectedCount} app${selectedCount !== 1 ? 's' : ''} selected`}
+          </Text>
+        </View>
 
-        <View style={{ flex: 1, marginTop: 10 }}>
+        {/* App List */}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            selectedCount > 0 && styles.scrollContentWithFooter
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
           {loading ? (
-            <Text>Loading installed apps...</Text>
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Loading installed apps...</Text>
+            </View>
           ) : filteredApps.length === 0 ? (
-            <Text>No apps found</Text>
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>🔍</Text>
+              <Text style={styles.emptyText}>No apps found</Text>
+            </View>
           ) : (
-            <ScrollView>
-              {filteredApps.map(app => (
-                <View key={app.id} style={styles.appItem}>
+            filteredApps.map((app: any) => (
+              <TouchableOpacity
+                key={app.id}
+                style={[
+                  styles.appItem,
+                  isAppBlocked(app.id) && styles.appItemSelected,
+                ]}
+                onPress={() => toggleAppBlock(app)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.appIconContainer}>
                   {app.icon ? (
                     <Image source={{ uri: app.icon }} style={styles.appIcon} />
                   ) : (
-                    <View
-                      style={[styles.appIcon, { backgroundColor: '#ddd' }]}
-                    />
+                    <View style={styles.appIconPlaceholder}>
+                      <Text style={styles.appIconPlaceholderText}>
+                        {app.name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
                   )}
-                  <View style={styles.appInfo}>
-                    <Text style={styles.appName}>{app.name}</Text>
-                    <Text style={styles.appId}>{app.id}</Text>
-                  </View>
-                  <View style={styles.checkbox}>
-                    <Button
-                      title={isAppBlocked(app.id) ? 'Unblock' : 'Block'}
-                      onPress={() => toggleAppBlock(app)}
-                      color={isAppBlocked(app.id) ? '#f44336' : '#2196F3'}
-                    />
-                  </View>
                 </View>
-              ))}
-            </ScrollView>
-          )}
-        </View>
-
-        {/* Permission prompt dialog */}
-        {showPermissionPrompt && (
-          <View style={styles.permissionOverlay}>
-            <View style={styles.permissionDialog}>
-              <Text style={styles.permissionDialogTitle}>
-                Permissions Required
-              </Text>
-
-              <Text style={styles.permissionDialogText}>
-                App Blocker needs these permissions to function properly:
-              </Text>
-
-              {/* Only show permissions that haven't been granted yet */}
-              {!permissions.overlay && (
-                <View style={styles.permissionRow}>
-                  <View style={styles.permissionStatus} />
-                  <Text style={styles.permissionText}>Draw Over Apps</Text>
-                  <TouchableOpacity
-                    style={styles.permissionButton}
-                    onPress={() => requestPermission('overlay')}
-                  >
-                    <Text style={styles.permissionButtonText}>Allow</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {!permissions.usage && (
-                <View style={styles.permissionRow}>
-                  <View style={styles.permissionStatus} />
-                  <Text style={styles.permissionText}>Usage Statistics</Text>
-                  <TouchableOpacity
-                    style={styles.permissionButton}
-                    onPress={() => requestPermission('usage')}
-                  >
-                    <Text style={styles.permissionButtonText}>Allow</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {!permissions.accessibility && (
-                <View style={styles.permissionRow}>
-                  <View style={styles.permissionStatus} />
-                  <Text style={styles.permissionText}>
-                    Accessibility Service
+                <View style={styles.appInfo}>
+                  <Text style={styles.appName} numberOfLines={1}>
+                    {app.name}
                   </Text>
-                  <TouchableOpacity
-                    style={styles.permissionButton}
-                    onPress={() => requestPermission('accessibility')}
-                  >
-                    <Text style={styles.permissionButtonText}>Allow</Text>
-                  </TouchableOpacity>
+                  <Text style={styles.appId} numberOfLines={1}>
+                    {app.id}
+                  </Text>
                 </View>
-              )}
-
-              {/* All permissions granted */}
-              {permissions.overlay &&
-              permissions.usage &&
-              permissions.accessibility ? (
-                <TouchableOpacity
-                  style={styles.closeButton}
-                  onPress={() => setShowPermissionPrompt(false)}
+                <View
+                  style={[
+                    styles.checkbox,
+                    isAppBlocked(app.id) && styles.checkboxSelected,
+                  ]}
                 >
-                  <Text style={styles.closeButtonText}>All Set! Continue</Text>
-                </TouchableOpacity>
-              ) : (
-                <Text style={styles.permissionNote}>
-                  These permissions are required for app blocking to work
-                  properly.
-                </Text>
-              )}
+                  {isAppBlocked(app.id) && (
+                    <Text style={styles.checkmark}>✓</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
 
-              {/* Show close button even if not all permissions granted */}
-              {(permissions.overlay ||
-                permissions.usage ||
-                permissions.accessibility) &&
-                !(
-                  permissions.overlay &&
-                  permissions.usage &&
-                  permissions.accessibility
-                ) && (
-                  <TouchableOpacity
-                    style={styles.laterButton}
-                    onPress={() => setShowPermissionPrompt(false)}
-                  >
-                    <Text style={styles.laterButtonText}>
-                      Continue (Not All Permissions Granted)
-                    </Text>
-                  </TouchableOpacity>
-                )}
-            </View>
+        {/* Floating Done Button Footer */}
+        {selectedCount > 0 && (
+          <View style={styles.footer}>
+             <Button 
+               title="Done" 
+               variant="primary" 
+               onPress={() => navigation.goBack()} 
+               fullWidth
+             />
           </View>
         )}
-      </View>
-    );
-  }
+      </SafeAreaView>
+    </View>
+  );
+};
+
+// ============================================
+// iOS Screen Time Setup Component
+// ============================================
+const IOSScreenTimeSetup: React.FC<{
+  iosSelectionData: string | null;
+  setIosSelectionData: (data: string | null) => void;
+  status: string;
+}> = ({ iosSelectionData, setIosSelectionData, status }) => {
+  const [authStatus, setAuthStatus] = useState<ScreenTimeAuthorizationStatus>('unknown');
+  const [loading, setLoading] = useState(false);
 
   const handleRequestAuthorization = async () => {
     try {
@@ -320,7 +230,7 @@ const AppSelectionScreen: React.FC<Props> = () => {
       if (statusResult !== 'approved') {
         Alert.alert(
           'Screen Time not approved',
-          'Go to Settings → Screen Time → App Limits / Content & Privacy to ensure this app is allowed to manage Screen Time.',
+          'Go to Settings → Screen Time → App Limits / Content & Privacy to ensure this app is allowed to manage Screen Time.'
         );
       }
     } catch {
@@ -334,14 +244,9 @@ const AppSelectionScreen: React.FC<Props> = () => {
     try {
       setLoading(true);
       const selectionBase64 = await openScreenTimePicker();
-      if (!selectionBase64) {
-        return;
-      }
+      if (!selectionBase64) return;
       setIosSelectionData(selectionBase64);
-      Alert.alert(
-        'Selection saved',
-        'Your Screen Time selection has been stored locally.',
-      );
+      Alert.alert('Selection saved', 'Your Screen Time selection has been stored.');
     } catch {
       Alert.alert('Error', 'Failed to open Screen Time picker.');
     } finally {
@@ -351,243 +256,312 @@ const AppSelectionScreen: React.FC<Props> = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>iOS Screen Time Setup</Text>
-      <Text style={styles.paragraph}>
-        This screen configures which apps iOS Screen Time should block when the
-        Brick state is enabled.
-      </Text>
+      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+      
+      <LinearGradient
+        colors={[colors.background, colors.backgroundSecondary]}
+        style={StyleSheet.absoluteFill}
+      />
 
-      <Text style={styles.label}>Current Screen Time authorization:</Text>
-      <Text style={styles.value}>{authStatus}</Text>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <ScrollView
+          contentContainerStyle={styles.iosScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.title}>Screen Time Setup</Text>
+            <Text style={styles.subtitle}>
+              Configure which apps iOS should block when enabled
+            </Text>
+          </View>
 
-      <View style={styles.buttonRow}>
-        <Button
-          title={loading ? 'Requesting…' : 'Request Screen Time Authorization'}
-          onPress={handleRequestAuthorization}
-          disabled={loading}
-        />
-      </View>
+          {/* Authorization Card */}
+          <Card variant="gradient" style={styles.iosCard}>
+            <View style={styles.iosCardContent}>
+              <Text style={styles.iosCardIcon}>🔐</Text>
+              <Text style={styles.iosCardTitle}>Authorization Status</Text>
+              <View style={styles.iosStatusBadge}>
+                <Text style={styles.iosStatusText}>{authStatus}</Text>
+              </View>
+              <Button
+                title={loading ? 'Requesting...' : 'Request Authorization'}
+                variant="primary"
+                onPress={handleRequestAuthorization}
+                disabled={loading}
+                fullWidth
+                style={styles.iosButton}
+              />
+            </View>
+          </Card>
 
-      <View style={styles.buttonRow}>
-        <Button
-          title={loading ? 'Opening picker…' : 'Choose Apps to Block'}
-          onPress={handleOpenPicker}
-          disabled={loading}
-        />
-      </View>
+          {/* App Selection Card */}
+          <Card variant="gradient" style={styles.iosCard}>
+            <View style={styles.iosCardContent}>
+              <Text style={styles.iosCardIcon}>📱</Text>
+              <Text style={styles.iosCardTitle}>App Selection</Text>
+              <View style={styles.iosStatusBadge}>
+                <Text style={styles.iosStatusText}>
+                  {iosSelectionData ? 'Configured' : 'Not configured'}
+                </Text>
+              </View>
+              <Button
+                title={loading ? 'Opening...' : 'Choose Apps to Block'}
+                variant="primary"
+                onPress={handleOpenPicker}
+                disabled={loading}
+                fullWidth
+                style={styles.iosButton}
+              />
+            </View>
+          </Card>
 
-      <Text style={styles.label}>Stored iOS selection:</Text>
-      <Text style={styles.value}>
-        {iosSelectionData ? 'Configured' : 'Not configured yet'}
-      </Text>
-
-      <Text style={styles.label}>Current brick state:</Text>
-      <Text style={styles.value}>{status}</Text>
-
-      <Text style={styles.paragraphSmall}>
-        When you toggle Brick on the Home screen, the app will ask iOS to apply
-        or remove Screen Time shields based on your selected apps.
-      </Text>
+          {/* Info Card */}
+          <Card variant="glass" style={styles.iosCard}>
+            <View style={styles.infoContent}>
+              <Text style={styles.infoTitle}>How it works</Text>
+              <Text style={styles.infoText}>
+                When you toggle blocking on the Home screen, the app will ask iOS to 
+                apply or remove Screen Time shields based on your selected apps.
+              </Text>
+            </View>
+          </Card>
+        </ScrollView>
+      </SafeAreaView>
     </View>
+  );
+};
+
+// ============================================
+// Main Component
+// ============================================
+const AppSelectionScreen: React.FC<Props> = ({ navigation }) => {
+  const {
+    iosSelectionData,
+    setIosSelectionData,
+    status,
+    blockedApps,
+    setBlockedApps,
+  } = useBrick();
+
+  if (Platform.OS === 'android') {
+    return (
+      <AndroidAppSelection
+        blockedApps={blockedApps}
+        setBlockedApps={setBlockedApps}
+        navigation={navigation}
+      />
+    );
+  }
+
+  return (
+    <IOSScreenTimeSetup
+      iosSelectionData={iosSelectionData || null}
+      setIosSelectionData={setIosSelectionData}
+      status={status}
+    />
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
+    backgroundColor: colors.background,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  header: {
+    paddingHorizontal: spacing.xl,
+    marginTop: spacing.xl,
+    marginBottom: spacing.lg,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 16,
+    color: colors.textPrimary,
+    ...typography.h1,
   },
-  paragraph: {
-    fontSize: 14,
-    marginBottom: 16,
+  subtitle: {
+    color: colors.textSecondary,
+    ...typography.body,
+    marginTop: spacing.xs,
   },
-  paragraphSmall: {
-    fontSize: 12,
-    marginTop: 16,
-    color: '#555',
+  searchContainer: {
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.lg,
   },
-  input: {
+  searchInput: {
+    backgroundColor: colors.cardBackground,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    color: colors.textPrimary,
+    ...typography.body,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 4,
-    padding: 8,
-    marginTop: 12,
+    borderColor: colors.border,
   },
-  label: {
-    fontSize: 14,
-    marginTop: 12,
-    color: '#555',
+  countContainer: {
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.md,
   },
-  value: {
-    fontSize: 16,
-    fontWeight: '500',
+  countText: {
+    color: colors.textMuted,
+    ...typography.bodySmall,
   },
-  buttonRow: {
-    marginTop: 16,
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxxl,
+  },
+  scrollContentWithFooter: {
+    paddingBottom: spacing.xxxl + 80, // Add extra padding for footer
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: spacing.xl,
+    backgroundColor: 'rgba(19, 20, 31, 0.95)',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.xl,
+  },
+  loadingContainer: {
+    paddingVertical: spacing.xxxl,
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: colors.textSecondary,
+    ...typography.body,
+  },
+  emptyContainer: {
+    paddingVertical: spacing.xxxl,
+    alignItems: 'center',
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: spacing.lg,
+  },
+  emptyText: {
+    color: colors.textSecondary,
+    ...typography.body,
   },
   appItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    backgroundColor: colors.cardBackground,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  appItemSelected: {
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+  },
+  appIconContainer: {
+    marginRight: spacing.md,
   },
   appIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.sm,
+  },
+  appIconPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.backgroundTertiary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appIconPlaceholderText: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '600',
   },
   appInfo: {
     flex: 1,
-    marginLeft: 10,
-    justifyContent: 'center',
   },
   appName: {
-    fontSize: 16,
+    color: colors.textPrimary,
+    ...typography.body,
     fontWeight: '500',
   },
   appId: {
-    fontSize: 12,
-    color: '#777',
+    color: colors.textMuted,
+    ...typography.caption,
+    marginTop: spacing.xs,
   },
   checkbox: {
-    width: 80,
-  },
-  advancedSection: {
-    marginTop: 24,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  advancedTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 8,
-    color: '#555',
-  },
-  note: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: '#888',
-    marginBottom: 12,
-  },
-  settingsButton: {
-    backgroundColor: '#f1f1f1',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  settingsButtonText: {
-    fontSize: 14,
-    color: '#555',
-  },
-  settingsButtonEnabled: {
-    backgroundColor: '#e0f2e9',
-  },
-  permissionOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    width: 24,
+    height: 24,
+    borderRadius: borderRadius.sm,
+    borderWidth: 2,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1000,
   },
-  permissionDialog: {
-    width: '80%',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 24,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+  checkboxSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
-  permissionDialogTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  permissionDialogText: {
+  checkmark: {
+    color: colors.textPrimary,
     fontSize: 14,
-    color: '#555',
-    marginBottom: 20,
-    textAlign: 'center',
+    fontWeight: 'bold',
   },
-  permissionRow: {
-    flexDirection: 'row',
+  // iOS Styles
+  iosScrollContent: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxxl,
+  },
+  iosCard: {
+    marginBottom: spacing.lg,
+  },
+  iosCardContent: {
     alignItems: 'center',
-    marginVertical: 8,
-    justifyContent: 'space-between',
   },
-  permissionStatus: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 10,
+  iosCardIcon: {
+    fontSize: 48,
+    marginBottom: spacing.md,
   },
-  permissionGranted: {
-    backgroundColor: '#43a047',
+  iosCardTitle: {
+    color: colors.textPrimary,
+    ...typography.h3,
+    marginBottom: spacing.md,
   },
-  permissionDenied: {
-    backgroundColor: '#e53935',
+  iosStatusBadge: {
+    backgroundColor: colors.backgroundTertiary,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.round,
+    marginBottom: spacing.lg,
   },
-  permissionText: {
-    flex: 1,
-    fontSize: 14,
+  iosStatusText: {
+    color: colors.textSecondary,
+    ...typography.bodySmall,
+    textTransform: 'capitalize',
   },
-  permissionButton: {
-    backgroundColor: '#2196F3',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 4,
+  iosButton: {
+    marginTop: spacing.sm,
   },
-  permissionButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
+  infoContent: {
+    padding: spacing.sm,
   },
-  permissionNote: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 16,
-    textAlign: 'center',
+  infoTitle: {
+    color: colors.textPrimary,
+    ...typography.body,
+    fontWeight: '600',
+    marginBottom: spacing.sm,
   },
-  closeButton: {
-    backgroundColor: '#43a047',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 4,
-    marginTop: 20,
-    alignSelf: 'center',
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  laterButton: {
-    backgroundColor: '#9e9e9e',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 4,
-    marginTop: 12,
-    alignSelf: 'center',
-  },
-  laterButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '500',
+  infoText: {
+    color: colors.textSecondary,
+    ...typography.bodySmall,
+    lineHeight: 22,
   },
 });
 

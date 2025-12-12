@@ -16,11 +16,13 @@
     "react": "19.1.1",
     "react-native": "0.82.1",
     "react-native-gesture-handler": "^2.20.0",
+    "react-native-linear-gradient": "^2.8.3",
     "react-native-mmkv": "^4.0.0",
     "react-native-nfc-manager": "^3.13.1",
     "react-native-nitro-modules": "^0.31.4",
     "react-native-safe-area-context": "^5.5.2",
-    "react-native-screens": "^4.9.0"
+    "react-native-screens": "^4.9.0",
+    "react-native-vision-camera": "^4.7.3"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

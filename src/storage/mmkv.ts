@@ -1,10 +1,10 @@
-import { MMKV } from 'react-native-mmkv';
+import { createMMKV, type MMKV } from 'react-native-mmkv';
 
 let storage: MMKV | null = null;
 
 function getStorage(): MMKV {
   if (!storage) {
-    storage = new MMKV({ id: 'nfc-app-blocker' });
+    storage = createMMKV({ id: 'nfc-app-blocker' });
   }
   return storage;
 }
@@ -19,10 +19,11 @@ export function getString(key: string): string | null {
 
 export function setString(key: string, value: string | null) {
   try {
+    const store = getStorage();
     if (value == null) {
-      getStorage().delete(key);
+      store.remove(key);
     } else {
-      getStorage().set(key, value);
+      store.set(key, value);
     }
   } catch {}
 }
