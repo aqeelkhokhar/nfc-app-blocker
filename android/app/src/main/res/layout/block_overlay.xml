@@ -2,15 +2,16 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#C8000000"
+    android:background="@color/block_overlay_scrim"
     android:clickable="true"
     android:focusable="true">
 
     <LinearLayout
+        android:id="@+id/block_card"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_centerInParent="true"
-        android:background="#FFFFFF"
+        android:background="@drawable/bg_block_card"
         android:orientation="vertical"
         android:padding="24dp"
         android:layout_marginLeft="32dp"
@@ -20,19 +21,50 @@
             android:id="@+id/tv_blocked_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="App Blocked"
-            android:textSize="24sp"
+            android:text="App Blocked \uD83D\uDD12"
+            android:textSize="20sp"
             android:textStyle="bold"
-            android:textColor="#E53935"
+            android:textColor="@color/block_text_primary"
             android:gravity="center" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/tv_blocked_open_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="You tried to open: "
+                android:textSize="14sp"
+                android:textColor="@color/block_text_secondary" />
+
+            <TextView
+                android:id="@+id/tv_blocked_app_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxWidth="240dp"
+                android:text="—"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/block_text_primary"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+        </LinearLayout>
 
         <TextView
             android:id="@+id/tv_blocked_message"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="This app has been blocked by App Blocker"
-            android:textSize="16sp"
+            android:text="This app is blocked right now. Go back to Home to stay on track."
+            android:textSize="14sp"
+            android:textColor="@color/block_text_secondary"
+            android:lineSpacingExtra="2dp"
             android:gravity="center" />
 
         <Button
@@ -41,8 +73,11 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
             android:text="Back to Home"
-            android:textColor="#FFFFFF"
-            android:background="#2196F3" />
+            android:textAllCaps="false"
+            android:textColor="@color/block_text_primary"
+            android:background="@drawable/bg_block_button"
+            android:paddingTop="14dp"
+            android:paddingBottom="14dp" />
 
     </LinearLayout>
 </RelativeLayout>

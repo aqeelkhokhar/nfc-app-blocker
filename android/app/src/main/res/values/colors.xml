@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="block_primary">#6366F1</color>
+    <color name="block_primary_end">#8B5CF6</color>
+
+    <color name="block_background">#0F0F1A</color>
+    <color name="block_card">#CC1E1E32</color>
+    <color name="block_border">#1AFFFFFF</color>
+
+    <color name="block_text_primary">#FFFFFF</color>
+    <color name="block_text_secondary">#A1A1AA</color>
+
+    <color name="block_overlay_scrim">#B3000000</color>
+</resources>

@@ -3,7 +3,6 @@ package com.nfcappblocker
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
@@ -82,8 +81,10 @@ class BlockOverlayService : Service() {
                 Log.d(TAG, "Showing block overlay for $packageName")
                 
                 val displayName = appName ?: packageName
+                val tvAppName = overlayView.findViewById<TextView>(R.id.tv_blocked_app_name)
+                tvAppName.text = displayName
                 val tvMessage = overlayView.findViewById<TextView>(R.id.tv_blocked_message)
-                tvMessage.text = "App blocked: $displayName"
+                tvMessage.text = "This app is blocked right now. Go back to Home to stay on track."
                 
                 val layoutParams = WindowManager.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
